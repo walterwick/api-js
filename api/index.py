@@ -1,112 +1,301 @@
-from flask import Flask, render_template_string, request, jsonify
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
-import time
+from flask import Flask, render_template_string
+import urllib.request as url_request
+import json
+import requests
 
 app = Flask(__name__)
 
-# Başsız modda tarayıcı başlatma ayarları
-def get_card_info(card_number):
-    options = Options()
-    options.add_argument('--headless')  # Başsız modda çalışmasını sağlar
-    options.add_argument('--disable-gpu')  # GPU'yu devre dışı bırakır (özellikle başsız modda)
-
-    # WebDriver'ı başlat
-    service = Service(ChromeDriverManager().install())  # ChromeDriver'ı otomatik olarak indirir
-    driver = webdriver.Chrome(service=service, options=options)
-
-    # Siteye git
-    driver.get('https://ulasim.urfakart.com/bakiye-sorgulama/')
-    time.sleep(2)
-
-    # Pop-up varsa, Tab tuşuna basarak pop-up'a geçiş yap ve Enter tuşuna bas
-    try:
-        actions = webdriver.ActionChains(driver)
-        actions.send_keys(Keys.TAB).perform()
-        time.sleep(0.5)  # Tab tuşundan sonra küçük bir bekleme
-        actions.send_keys(Keys.RETURN).perform()  # Pop-up'ı kapat
-    except Exception as e:
-        print("Pop-up kapatma işlemi sırasında hata oluştu:", e)
-
-    # Input alanına veri yazmadan önce input öğesinin etkileşimli olmasını bekle
-    input_element = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.ID, 'input-47'))
-    )
-
-    # Input alanına kart numarasını yaz
-    input_element.send_keys(card_number)
-
-    # Enter tuşuna bas
-    input_element.send_keys(Keys.RETURN)
-
-    # Sayfa yüklenene kadar bekle (dinamik içerik için)
-    time.sleep(3)
-
-    # Sonuçları al: Tüm <div> öğesinin içeriğini almak için
-    try:
-        result_div = driver.find_element(By.CLASS_NAME, 'v-card')
-        result = result_div.text
-    except Exception as e:
-        result = "Sonuç alınırken hata oluştu"
-
-    # Tarayıcıyı kapat
-    driver.quit()
-
-    return result
-
-# Ana sayfa route'u
 @app.route('/')
 def index():
-    return render_template_string('''
+    return render_template_string("""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>F1 Dashboard</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f4;
+                color: #333;
+                margin: 0;
+                padding: 0;
+            }
+            h1 {
+                text-align: center;
+                margin-top: 20px;
+            }
+            .container {
+                max-width: 1200px;
+                margin: 20px auto;
+                padding: 20px;
+                background: #fff;
+                border-radius: 10px;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                text-align: center;
+            }
+            .links {
+                margin-top: 30px;
+            }
+            .links a {
+                margin: 10px;
+                padding: 15px 30px;
+                background-color: #4CAF50;
+                color: white;
+                text-decoration: none;
+                border-radius: 5px;
+                font-size: 18px;
+            }
+            .links a:hover {
+                background-color: #45a049;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>F1 Dashboard</h1>
+        <div class="container">
+            <h2>Welcome to the F1 Dashboard</h2>
+            <div class="links">
+                <a href="/radio">Radyo Mesajları</a>
+                <a href="/messages">Race Control Mesajları</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    """)
+
+@app.route('/radio')
+def radio():
+    try:
+        session_url = 'http://livetiming.formula1.com/static/SessionInfo.json'
+        with url_request.urlopen(session_url) as response:
+            if response.getcode() == 200:
+                session_info = json.loads(response.read().decode('utf-8-sig'))
+                base_path = session_info['Path']
+            else:
+                return "Session info API failed."
+
+        team_radio_url = f'http://livetiming.formula1.com/static/{base_path}TeamRadio.json'
+        team_radio_response = requests.get(team_radio_url)
+        if team_radio_response.status_code == 200:
+            team_radio_data = json.loads(team_radio_response.text.encode('utf-8').decode('utf-8-sig'))
+        else:
+            team_radio_data = {"Captures": []}
+
+        html = """
         <!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Kart Bilgisi Sorgulama</title>
+            <title>Radyo Mesajları</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    background-color: #f4f4f4;
+                    color: #333;
+                    margin: 0;
+                    padding: 0;
+                }
+                h1, h2 {
+                    text-align: center;
+                    margin-top: 20px;
+                }
+                .container {
+                    max-width: 1200px;
+                    margin: 20px auto;
+                    padding: 20px;
+                    background: #fff;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                }
+                .back-link {
+                    text-align: center;
+                    margin: 20px;
+                }
+                .back-link a {
+                    background-color: #4CAF50;
+                    color: white;
+                    padding: 10px 20px;
+                    text-decoration: none;
+                    border-radius: 5px;
+                }
+                .back-link a:hover {
+                    background-color: #45a049;
+                }
+                ul {
+                    list-style: none;
+                    padding: 0;
+                }
+                li {
+                    background-color: #f9f9f9;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    padding: 10px;
+                    margin-bottom: 10px;
+                }
+                .buttons button {
+                    margin: 5px 0;
+                }
+            </style>
         </head>
         <body>
-            <h1>Kart Bilgisi Sorgulama</h1>
-            <form action="/get_card_info" method="POST">
-                <label for="card_number">Kart Numarası:</label>
-                <input type="text" id="card_number" name="card_number" required>
-                <button type="submit">Sorgula</button>
-            </form>
-
-            <div id="result">
-                <!-- Sonuç burada gösterilecek -->
+            <h1>Radyo Mesajları</h1>
+            <div class="container">
+                <ul>
+        """
+        for index, capture in enumerate(team_radio_data.get("Captures", [])):
+            full_url = f"http://livetiming.formula1.com/static/{base_path}{capture['Path']}"
+            html += f"""
+            <li>
+                <strong>Racing Number:</strong> {capture['RacingNumber']}<br>
+                <strong>UTC:</strong> {capture['Utc']}<br>
+                <audio id="audio-{index}" src="{full_url}"></audio>
+                <div class="buttons">
+                    <button onclick="playAudio({index})">Başlat</button>
+                    <button onclick="stopAudio({index})">Durdur</button>
+                </div>
+            </li>
+            """
+        html += """
+                </ul>
+                <div class="back-link">
+                    <a href="/">Ana Sayfaya Dön</a>
+                </div>
             </div>
-
             <script>
-                // Formu gönderdiğinde sonucu alıp, sayfada göstermek
-                const form = document.querySelector('form');
-                form.addEventListener('submit', async (event) => {
-                    event.preventDefault();
-                    const formData = new FormData(form);
-                    const response = await fetch('/get_card_info', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    const data = await response.json();
-                    document.getElementById('result').innerText = data.result;
-                });
+                let currentAudio = null;
+
+                function playAudio(index) {
+                    if (currentAudio) {
+                        currentAudio.pause();
+                        currentAudio.currentTime = 0;
+                    }
+                    const audio = document.getElementById(`audio-${index}`);
+                    audio.play();
+                    currentAudio = audio;
+                }
+
+                function stopAudio(index) {
+                    const audio = document.getElementById(`audio-${index}`);
+                    audio.pause();
+                    audio.currentTime = 0;
+                    currentAudio = null;
+                }
             </script>
         </body>
         </html>
-    ''')
+        """
+        return html
 
-# Kart sorgulama route'u
-@app.route('/get_card_info', methods=['POST'])
-def get_card_info_route():
-    card_number = request.form['card_number']
-    result = get_card_info(card_number)
-    return jsonify({'result': result})
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@app.route('/messages')
+def messages():
+    try:
+        session_url = 'http://livetiming.formula1.com/static/SessionInfo.json'
+        with url_request.urlopen(session_url) as response:
+            if response.getcode() == 200:
+                session_info = json.loads(response.read().decode('utf-8-sig'))
+                base_path = session_info['Path']
+            else:
+                return "Session info API failed."
+
+        race_control_url = f'http://livetiming.formula1.com/static/{base_path}RaceControlMessages.json'
+        race_control_response = requests.get(race_control_url)
+        if race_control_response.status_code == 200:
+            race_control_data = json.loads(race_control_response.text.encode('utf-8').decode('utf-8-sig'))
+        else:
+            race_control_data = {"Messages": []}
+
+        html = """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Race Control Mesajları</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    background-color: #f4f4f4;
+                    color: #333;
+                    margin: 0;
+                    padding: 0;
+                }
+                h1, h2 {
+                    text-align: center;
+                    margin-top: 20px;
+                }
+                .container {
+                    max-width: 1200px;
+                    margin: 20px auto;
+                    padding: 20px;
+                    background: #fff;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                }
+                .back-link {
+                    text-align: center;
+                    margin: 20px;
+                }
+                .back-link a {
+                    background-color: #4CAF50;
+                    color: white;
+                    padding: 10px 20px;
+                    text-decoration: none;
+                    border-radius: 5px;
+                }
+                .back-link a:hover {
+                    background-color: #45a049;
+                }
+                ul {
+                    list-style: none;
+                    padding: 0;
+                }
+                li {
+                    background-color: #f9f9f9;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    padding: 10px;
+                    margin-bottom: 10px;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>Race Control Mesajları</h1>
+            <div class="container">
+                <ul>
+        """
+        for message in race_control_data.get("Messages", []):
+            html += f"""
+            <li>
+                <strong>UTC:</strong> {message['Utc']}<br>
+                <strong>Lap:</strong> {message['Lap']}<br>
+                <strong>Category:</strong> {message['Category']}<br>
+                <strong>Message:</strong> {message['Message']}<br>
+            """
+            if "Flag" in message:
+                html += f"<strong>Flag:</strong> {message['Flag']}<br>"
+            if "Scope" in message:
+                html += f"<strong>Scope:</strong> {message['Scope']}<br>"
+            html += "</li>"
+
+        html += """
+                </ul>
+                <div class="back-link">
+                    <a href="/">Ana Sayfaya Dön</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        return html
+
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 if __name__ == '__main__':
     app.run(debug=True)
