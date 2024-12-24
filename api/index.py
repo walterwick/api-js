@@ -3,13 +3,30 @@ from io import BytesIO
 import requests
 from instaloader import Instaloader, Profile
 import base64
+import os
 
 app = Flask(__name__)
 
-# Instaloader ile oturum açma
-insta = Instaloader()
-insta.login('walterw6770','ws7ca7p7')        # (login)
+# Çerez dosyasının yolu
+COOKIE_FILE = "insta_session"
 
+# Instaloader nesnesi oluştur
+insta = Instaloader()
+
+# Oturum açma fonksiyonu
+def login_to_instagram(username, password):
+    if os.path.exists(COOKIE_FILE):
+        # Eğer çerez dosyası varsa, onu yükle
+        insta.load_session_from_file(username, COOKIE_FILE)
+        print("Oturum çerezden yüklendi.")
+    else:
+        # Çerez yoksa oturum aç ve çerezi kaydet
+        insta.login(username, password)
+        insta.save_session_to_file(COOKIE_FILE)
+        print("Yeni oturum açıldı ve çerez kaydedildi.")
+
+# Instagram'a giriş yap
+login_to_instagram('walterw6770', 'ws7ca7p7')
 
 @app.route("/")
 def index():
@@ -90,4 +107,4 @@ def profile():
         return "Kullanıcı adı eksik & hatalı"
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000) #host paametresi diğer ip'lerden erişmek için
+    app.run(debug=True, host="0.0.0.0", port=5000) #host parametresi diğer ip'lerden erişmek için
